@@ -6,10 +6,13 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-only-secret")
 
 # ── Configuration read from environment variables ──────────────────────────
 APP_NAME      = os.getenv("APP_NAME", "Even-Odd Checker")
-APP_VERSION   = os.getenv("APP_VERSION", "1.0.0")
+APP_VERSION   = os.getenv("APP_VERSION", "2.0.0")
 DEBUG_MODE    = os.getenv("DEBUG_MODE", "false").lower() == "true"
 MAX_INPUT     = int(os.getenv("MAX_INPUT", "1000000"))
 BG_COLOR      = os.getenv("BG_COLOR", "#f0f4f8")
+# ── NEW: bonus values — NOT declared in docker-compose or k8s! ─────────────
+EVEN_BONUS    = int(os.getenv("EVEN_BONUS", "10"))   # ← drift: missing from config
+ODD_BONUS     = int(os.getenv("ODD_BONUS",  "5"))    # ← drift: missing from config
 # ──────────────────────────────────────────────────────────────────────────
 
 HTML = """<!DOCTYPE html>
@@ -52,6 +55,13 @@ HTML = """<!DOCTYPE html>
     }
     .even { background: #c6f6d5; color: #22543d; }
     .odd  { background: #fefcbf; color: #744210; }
+    .bonus-badge {
+      display: inline-block; margin-top: 10px;
+      border-radius: 20px; padding: 5px 16px;
+      font-size: .85rem; font-weight: 500;
+    }
+    .bonus-even { background: #bee3f8; color: #2a4a6b; }
+    .bonus-odd  { background: #fed7aa; color: #7b341e; }
     .debug-bar {
       margin-top: 28px; padding: 10px 14px; background: #edf2f7;
       border-radius: 6px; font-size: .75rem; color: #718096;
@@ -76,13 +86,18 @@ HTML = """<!DOCTYPE html>
     {% if result %}
     <div class="result {{ css_class }}">
       {{ number }} is <strong>{{ result }}</strong>
+      {% if css_class == 'even' %}
+      <br><span class="bonus-badge bonus-even">+{{ even_bonus }} (EVEN_BONUS) → {{ adjusted }}</span>
+      {% else %}
+      <br><span class="bonus-badge bonus-odd">+{{ odd_bonus }} (ODD_BONUS) → {{ adjusted }}</span>
+      {% endif %}
     </div>
     {% endif %}
 
     {% if debug %}
     <div class="debug-bar">
-      🛠 Debug ON &nbsp;|&nbsp; MAX_INPUT={{ max_input }}
-      &nbsp;|&nbsp; BG_COLOR={{ bg_color }}
+      🛠 Debug ON &nbsp;|&nbsp; EVEN_BONUS={{ even_bonus }}
+      &nbsp;|&nbsp; ODD_BONUS={{ odd_bonus }}
       &nbsp;|&nbsp; Version={{ version }}
     </div>
     {% endif %}
@@ -98,18 +113,24 @@ HTML = """<!DOCTYPE html>
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = css_class = number = None
+    adjusted = None
+
     if request.method == "POST":
         try:
             number = int(request.form["number"])
             if abs(number) > MAX_INPUT:
                 result = f"Number exceeds MAX_INPUT ({MAX_INPUT})"
                 css_class = "odd"
+                adjusted = number
             elif number % 2 == 0:
+                adjusted = number + EVEN_BONUS   # even: add 10
                 result, css_class = "EVEN", "even"
             else:
+                adjusted = number + ODD_BONUS    # odd: add 5
                 result, css_class = "ODD", "odd"
         except ValueError:
             result, css_class = "Invalid input", "odd"
+            adjusted = 0
 
     return render_template_string(
         HTML,
@@ -118,15 +139,19 @@ def index():
         debug=DEBUG_MODE,
         max_input=MAX_INPUT,
         bg_color=BG_COLOR,
+        even_bonus=EVEN_BONUS,
+        odd_bonus=ODD_BONUS,
         number=number,
         result=result,
         css_class=css_class,
+        adjusted=adjusted,
     )
 
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "app": APP_NAME, "version": APP_VERSION}
+    return {"status": "ok", "app": APP_NAME, "version": APP_VERSION,
+            "even_bonus": EVEN_BONUS, "odd_bonus": ODD_BONUS}
 
 
 if __name__ == "__main__":
