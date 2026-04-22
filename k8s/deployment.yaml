@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: even-odd-app
+  labels:
+    app: even-odd-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: even-odd-app
+  template:
+    metadata:
+      labels:
+        app: even-odd-app
+    spec:
+      containers:
+        - name: even-odd-app
+          image: even-odd-app:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: APP_NAME
+              value: "Even-Odd Checker"
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: APP_PORT
+              value: "5000"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: secret-key
+            - name: DEBUG_MODE
+              value: "false"
+            - name: MAX_INPUT
+              value: "1000000"
+            - name: BG_COLOR
+              value: "#f0f4f8"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: even-odd-service
+spec:
+  selector:
+    app: even-odd-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
